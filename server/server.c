@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #define MAX_BUFFER 200 // max buffer size
 #define MAX_COMMAND 100 // max command size
@@ -14,6 +15,31 @@
 #define MAX_USERS 100
 #define MAX_USERNAME 300 // max username length
 #define MAX_PASSWORD 300
+#define SIZE 1024
+
+void write_file(int socket, char* filename) {
+    //writing into file the data from the client
+    int n;
+    FILE *fp;
+    char buffer[MAX_BUFFER];
+    fp = fopen(filename, "w");
+    while (1) {
+        //printf("check3 \n");
+        n = recv(socket, buffer, MAX_BUFFER, 0);
+        //printf("check4 \n");
+        if (n <= 0){
+            printf("CHECK \n");
+            break;
+            return;
+        }
+        fputs(buffer, fp);
+        //fprintf(fp, "%s", buffer);
+        bzero(buffer, MAX_BUFFER);
+        //printf("check5 \n");
+    }
+    fclose(fp);
+    return;
+}
 
 int main()
 {
@@ -37,8 +63,8 @@ int main()
     /*
      * build the server's internet address
      */
-    int port_no = 21; // server port number for control channel
-	struct sockaddr_in server_addr;
+    int port_no = 20; // server port number for control channel
+	struct sockaddr_in server_addr, new_addr;
 	bzero((char *) &server_addr, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons((unsigned short) port_no);
@@ -100,6 +126,10 @@ int main()
         login_status[i] = 0;
     }
     int user_i = 0; // user index of current user (< num_users)
+
+    char filename[MAX_BUFFER];
+    int new_socket;
+    socklen_t addr_size;
     /*
      * for select()
      */
@@ -107,6 +137,7 @@ int main()
     FD_ZERO(&current_sockets);
     FD_SET(server_sd, &current_sockets);
     int max_sd = server_sd;
+
 	while (1)
 	{
         ready_sockets = current_sockets; // select is destructive
@@ -146,11 +177,12 @@ int main()
                         printf("Error: read failed\n");
                         exit(EXIT_FAILURE);
                     }
-                    
+
+                    else {
                     // parse user input into command and argument
                     int arglen = 0; // keep track of argument length
                     if (strcmp(buffer, "") != 0) { // if buffer is not empty
-                        // printf("From client_sd %d: \"%s\" \n", sd, buffer); // TEST
+                        printf("From client_sd %d: \"%s\" \n", sd, buffer); // TEST
                         bzero(command, sizeof(command));
                         bzero(response, sizeof(response));
                         sprintf(response, "Default response");
@@ -180,6 +212,30 @@ int main()
                             }
                             else if (strcmp(command, "PWD") == 0) {
                                 system("pwd");
+                            }
+                            else if(strcmp(command, "STOR") == 0){
+                                if (strcmp(args, "") != 0){
+                                    strcpy(filename, args);
+                                }        
+                                else {
+                                    printf("Error: empty filename");
+                                }
+			                    printf("\nInitiating the Sending Process\n");
+			                    write_file(sd, filename);
+                                sprintf(response, "Upload Successful");
+                                break;
+            	            }
+
+                            else if (strcmp(command, "RETR")== 0) {
+                                //receives filename 
+                                if (strcmp(args, "") != 0){
+                                    strcpy(filename, args);
+                                    //RETR(filename);
+                                }        
+
+                                else {
+                                    printf("Error: empty filename");
+                                }
                             }
                             // freopen ("/dev/tty", "a", stdout); // redirect stdout back to terminal
                         }
@@ -219,6 +275,7 @@ int main()
                         // respond to client
                         send(sd, response, sizeof(response), 0);
                         // FD_CLR(sd, &current_sockets); // remove client socket from current_sockets
+                    }
                     }
                 }
             }
