@@ -15,31 +15,47 @@
 #define MAX_USERS 100
 #define MAX_USERNAME 300 // max username length
 #define MAX_PASSWORD 300
-#define SIZE 1024
+#define DATA_SIZE 1024
 
 void write_file(int socket, char* filename) {
     //writing into file the data from the client
     int n;
     FILE *fp;
-    char buffer[MAX_BUFFER];
+    char buffer[DATA_SIZE] = {0};
     fp = fopen(filename, "w");
+    if(NULL == fp)
+    {
+       	printf("Error opening file");
+        return;
+    }
     while (1) {
-        //printf("check3 \n");
-        n = recv(socket, buffer, MAX_BUFFER, 0);
-        //printf("check4 \n");
-        if (n <= 0){
-            printf("CHECK \n");
+        n = recv(socket, buffer, sizeof(buffer), 0);
+        if (strncmp(buffer, "\0", 1) == 0){ // fix later
             break;
-            return;
-        }
+        } 
         fputs(buffer, fp);
-        //fprintf(fp, "%s", buffer);
-        bzero(buffer, MAX_BUFFER);
-        //printf("check5 \n");
+        bzero(buffer, DATA_SIZE);
     }
     fclose(fp);
-    return;
 }
+
+// void send_file(FILE* fp, int server_sd, char* buffer){
+//     printf("Sending buffer: -%s-\n", buffer);
+//     send(server_sd, buffer, MAX_BUFFER, 0);
+//     char data[DATA_SIZE] = {0};
+//     while(fgets(data,DATA_SIZE, fp) != NULL) {
+//         //printf("check3 \n");
+//         printf("Sending message: -%s-\n", data);
+//         if (send(server_sd, data, sizeof(data), 0) == -1) {
+//             //printf("check4 \n");
+//             perror("Error: sending file.");
+//             exit(1);
+//         }
+//     bzero(data, DATA_SIZE);
+//   }
+//   printf("ASD\n");
+//   send(server_sd, "\0", 1, 0);
+// }
 
 int main()
 {
@@ -63,7 +79,7 @@ int main()
     /*
      * build the server's internet address
      */
-    int port_no = 20; // server port number for control channel
+    int port_no = 21; // server port number for control channel
 	struct sockaddr_in server_addr, new_addr;
 	bzero((char *) &server_addr, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
@@ -170,6 +186,7 @@ int main()
                     client_port = ntohs(client_addr.sin_port);
                     printf("Client IP: %s\n", client_ip);
                     printf("Client Port: %d\n", client_port);
+                    printf("200 PORT command successful \n");
                 }
                 else {
                     bzero(buffer, sizeof(buffer)); // place null bytes in the buffer
@@ -182,7 +199,7 @@ int main()
                     // parse user input into command and argument
                     int arglen = 0; // keep track of argument length
                     if (strcmp(buffer, "") != 0) { // if buffer is not empty
-                        printf("From client_sd %d: \"%s\" \n", sd, buffer); // TEST
+                        //printf("From client_sd %d: \"%s\" \n", sd, buffer); // TEST
                         bzero(command, sizeof(command));
                         bzero(response, sizeof(response));
                         sprintf(response, "Default response");
@@ -220,22 +237,17 @@ int main()
                                 else {
                                     printf("Error: empty filename");
                                 }
-			                    printf("\nInitiating the Sending Process\n");
-			                    write_file(sd, filename);
+
+                                write_file(sd, filename);
                                 sprintf(response, "Upload Successful");
+                                send(sd, response, sizeof(response), 0);
+                                printf("\nUpload Successful\n");
                                 break;
             	            }
 
                             else if (strcmp(command, "RETR")== 0) {
-                                //receives filename 
-                                if (strcmp(args, "") != 0){
-                                    strcpy(filename, args);
-                                    //RETR(filename);
-                                }        
 
-                                else {
-                                    printf("Error: empty filename");
-                                }
+                                break;
                             }
                             // freopen ("/dev/tty", "a", stdout); // redirect stdout back to terminal
                         }

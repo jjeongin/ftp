@@ -19,19 +19,42 @@
 #define DATA_SIZE 1024
 
 void send_file(FILE* fp, int server_sd, char* buffer){
-    buffer[strcspn(buffer, "\n")] = 0;
     send(server_sd, buffer, MAX_BUFFER, 0);
     char data[DATA_SIZE] = {0};
-    while(fgets(data, DATA_SIZE, fp) != NULL) {
-        //printf("check3 \n");
+    while(fgets(data,DATA_SIZE, fp) != NULL) {
+        
+        //printf("Sending message: -%s-\n", data);
         if (send(server_sd, data, sizeof(data), 0) == -1) {
-            //printf("check4 \n");
+            
             perror("Error: sending file.");
             exit(1);
         }
     bzero(data, DATA_SIZE);
   }
+  send(server_sd, "\0", 1, 0);
 }
+
+// void write_file(int socket, char* filename) {
+//     //writing into file the data from the client
+//     int n;
+//     FILE *fp;
+//     char buffer[DATA_SIZE] = {0};
+//     fp = fopen(filename, "w");
+//     if(NULL == fp)
+//     {
+//        	printf("Error opening file");
+//         return;
+//     }
+//     while (1) {
+//         n = recv(socket, buffer, sizeof(buffer), 0);
+//         if (strncmp(buffer, "\0", 1) == 0){ // fix later
+//             break;
+//         } 
+//         fputs(buffer, fp);
+//         bzero(buffer, DATA_SIZE);
+//     }
+//     fclose(fp);
+// }
 
 int main()
 {
@@ -42,7 +65,7 @@ int main()
 		perror("Error: opening socket");
 		exit(1);
 	}
-    int port_no = 20; // server port number for control channel
+    int port_no = 21; // server port number for control channel
 	struct sockaddr_in server_addr;
     bzero((char *) &server_addr, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
@@ -110,7 +133,21 @@ int main()
                     exit(1);
                 }
             send_file(fp, server_sd, copy_buffer);
+            fclose(fp);
+            bzero(response, sizeof(response));
+            recv(server_sd, &response, sizeof(response), 0); // recieve output from the server
             printf("%s\n", response);
+        }
+         else if (strncmp(buffer, "RETR", 4) ==0){
+            char * delim = "\t\r\n ";
+            char * args = strtok(buffer, delim); // first argument
+            strcpy(command, args); // copy first argument into command
+            if (args != NULL) {
+                args = strtok(NULL, delim); // second argument
+            }
+            send(server_sd, buffer, MAX_BUFFER, 0);
+
+            break;
         }
         else {  
             send(server_sd, buffer, sizeof(buffer), 0); // send command to server
