@@ -2,13 +2,13 @@ CC = gcc
 CFLAGS = -Wall -g
 
 # ****************************************************
-all: server client
+all: server_dir/server client_dir/client
 
-server: server.c
-	$(CC) $(CFLAGS) server.c -o server
+server: server_dir/server.c
+	$(CC) $(CFLAGS) server_dir/server.c -o server_dir/server
 
-client: client.c
-	$(CC) $(CFLAGS) client.c -o client
+client: client_dir/client.c
+	$(CC) $(CFLAGS) client_dir/client.c -o client_dir/client
 
 clean:
 	rm -f

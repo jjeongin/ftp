@@ -18,7 +18,7 @@
 #define DATA_SIZE 1024
 
 void write_file(int socket, char* filename) {
-    //writing into file the data from the client
+    // writing into file the data from the client
     int n;
     FILE *fp;
     char buffer[DATA_SIZE] = {0};
@@ -153,7 +153,6 @@ int main()
     FD_ZERO(&current_sockets);
     FD_SET(server_sd, &current_sockets);
     int max_sd = server_sd;
-
 	while (1)
 	{
         ready_sockets = current_sockets; // select is destructive
@@ -186,24 +185,19 @@ int main()
                     client_port = ntohs(client_addr.sin_port);
                     printf("Client IP: %s\n", client_ip);
                     printf("Client Port: %d\n", client_port);
-                    printf("200 PORT command successful \n");
                 }
                 else {
                     bzero(buffer, sizeof(buffer)); // place null bytes in the buffer
-                    if (read(sd, (void *) &buffer, sizeof(buffer)) < 0) {
+                    if (read(sd, (void *) &buffer, sizeof(buffer)) < 0) { // read from buffer
                         printf("Error: read failed\n");
                         exit(EXIT_FAILURE);
                     }
-
-                    else {
-                    // parse user input into command and argument
-                    int arglen = 0; // keep track of argument length
                     if (strcmp(buffer, "") != 0) { // if buffer is not empty
                         //printf("From client_sd %d: \"%s\" \n", sd, buffer); // TEST
                         bzero(command, sizeof(command));
                         bzero(response, sizeof(response));
                         sprintf(response, "Default response");
-
+                        // parse user input into command and argument
                         char * delim = "\t\n ";
                         args = strtok(buffer, delim); // first argument
                         strcpy(command, args); // copy first argument into command
@@ -230,26 +224,89 @@ int main()
                             else if (strcmp(command, "PWD") == 0) {
                                 system("pwd");
                             }
-                            else if(strcmp(command, "STOR") == 0){
+                            else if (strcmp(command, "PORT") == 0) {
+                                // printf("PORT command from %s\n", args); // TEST
+                                // parse user input into command and argument
+                                char * delim = ",";
+                                char data_address[1000];
+                                int data_port, p1, p2;
+                                char * token;
+                                int counter = 0;
+
+                                token = strtok(args, delim); // first token
+                                strcpy(data_address, token); // copy first token
+                                counter++;
+                                while (token != NULL) {
+                                    token = strtok(NULL, delim); // get new token
+                                    if (counter < 4) {
+                                        strcat(data_address, ".");
+                                        strcat(data_address, token);
+                                    }
+                                    else if (counter == 4) {
+                                        p1 = atoi(token);
+                                    }
+                                    else if (counter == 5) {
+                                        p2 = atoi(token);
+                                    }
+                                    counter++;
+                                }
+                                // convert p1 and p2 to port
+                                data_port = (p1 * 256) + p2;
+                                printf("data address %s, data port %d\n", data_address, data_port); // TEST
+
+                                // // create new socket for data connection ??
+                                // int data_sd = socket(AF_INET, SOCK_STREAM, 0);
+                                // if (data_sd < 0) {
+                                //     perror("Error: socket() failed");
+                                //     exit(EXIT_FAILURE);
+                                // }
+                                // // set socket options
+                                // int opt = 1;
+                                // if (setsockopt(data_sd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+                                //     perror("Error: setsockopt() failed");
+                                //     exit(EXIT_FAILURE);
+                                // }
+                                // // set socket address
+                                // struct sockaddr_in data_addr;
+                                // data_addr.sin_family = AF_INET;
+                                // data_addr.sin_addr.s_addr = INADDR_ANY;
+                                // data_addr.sin_port = htons(data_port);
+                                // // bind socket to address
+                                // if (bind(data_sd, (struct sockaddr *) &data_addr, sizeof(data_addr)) < 0) {
+                                //     perror("Error: bind() failed");
+                                //     exit(EXIT_FAILURE);
+                                // }
+                                // // listen for connections
+                                // if (listen(data_sd, 5) < 0) {
+                                //     perror("Error: listen() failed");
+                                //     exit(EXIT_FAILURE);
+                                // }
+                                // // accept a new conection from client
+                                // int data_client_sd = accept(data_sd, (struct sockaddr *) &data_addr, (socklen_t *) &addrlen);
+                                // if (data_client_sd < 0) {
+                                //     perror("Error: accept() failed");
+                                //     exit(EXIT_FAILURE);
+                                // }
+                                sprintf(response, "200 PORT command successful.");
+                                // close(data_sd); // close connections
+                                // close(data_client_sd);
+                            }
+                            else if (strcmp(command, "STOR") == 0) {
                                 if (strcmp(args, "") != 0){
                                     strcpy(filename, args);
-                                }        
+                                }
                                 else {
                                     printf("Error: empty filename");
                                 }
-
                                 write_file(sd, filename);
                                 sprintf(response, "Upload Successful");
                                 send(sd, response, sizeof(response), 0);
                                 printf("\nUpload Successful\n");
                                 break;
             	            }
-
                             else if (strcmp(command, "RETR")== 0) {
-
                                 break;
                             }
-                            // freopen ("/dev/tty", "a", stdout); // redirect stdout back to terminal
                         }
                         else { // trigger user authentication
                             if (strcmp(command, "USER") == 0) {
@@ -287,7 +344,6 @@ int main()
                         // respond to client
                         send(sd, response, sizeof(response), 0);
                         // FD_CLR(sd, &current_sockets); // remove client socket from current_sockets
-                    }
                     }
                 }
             }
