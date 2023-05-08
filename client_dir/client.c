@@ -156,65 +156,71 @@ int main()
             // fclose(fp);
         }
         else if (strncmp(buffer, "LIST", 4) == 0) {
-            // PORT command
-            // replace all . with , in client IP
-            char * current_pos = strchr(client_ip, '.');
-            while (current_pos) {
-                * current_pos = ',';
-                current_pos = strchr(current_pos, '.');
-            }
-            // convert port to p1 and p2
-            int p1 = data_port / 256;
-            int p2 = data_port % 256;
-            char port_command[MAX_COMMAND];
-            sprintf(port_command, "PORT %s,%d,%d", client_ip, p1, p2);
-            // send PORT command to server
-            send(client_sd, port_command, sizeof(port_command), 0);
-            // open new data connection
-            int data_sd = socket(AF_INET, SOCK_STREAM, 0);
-            if (data_sd < 0)
-            {
-                perror("Error opening socket");
-                exit(-1);
-            }
-            // set socket option
-            int value  = 1;
-            setsockopt(data_sd, SOL_SOCKET, SO_REUSEADDR, (const void *) &value, sizeof(value));
-            // build data address
-            struct sockaddr_in data_addr;
-            bzero((char *) &data_addr, sizeof(data_addr));
-            data_addr.sin_family = AF_INET;
-            data_addr.sin_port = htons((unsigned short) data_port);
-            data_addr.sin_addr.s_addr = INADDR_ANY;
-            // bind
-            if (bind(data_sd, (struct sockaddr *) &data_addr, sizeof(data_addr)) < 0)
-            {
-                perror("bind failed");
-                exit(-1);
-            }
-            // listen
-            if (listen(data_sd, 5) < 0) {
-                printf("Listen failed..\n");
-                exit(-1);
-            }
+            // // PORT command
+            // // replace all . with , in client IP
+            // char * current_pos = strchr(client_ip, '.');
+            // while (current_pos) {
+            //     * current_pos = ',';
+            //     current_pos = strchr(current_pos, '.');
+            // }
+            // // convert port to p1 and p2
+            // int p1 = data_port / 256;
+            // int p2 = data_port % 256;
+            // char port_command[MAX_COMMAND];
+            // sprintf(port_command, "PORT %s,%d,%d", client_ip, p1, p2);
+            // // send PORT command to server
+            // send(client_sd, port_command, sizeof(port_command), 0);
+            // // open new data connection
+            // int data_sd = socket(AF_INET, SOCK_STREAM, 0);
+            // if (data_sd < 0)
+            // {
+            //     perror("Error opening socket");
+            //     exit(-1);
+            // }
+            // // set socket option
+            // int value  = 1;
+            // setsockopt(data_sd, SOL_SOCKET, SO_REUSEADDR, (const void *) &value, sizeof(value));
+            // // build data address
+            // struct sockaddr_in data_addr;
+            // bzero((char *) &data_addr, sizeof(data_addr));
+            // data_addr.sin_family = AF_INET;
+            // data_addr.sin_port = htons((unsigned short) data_port);
+            // data_addr.sin_addr.s_addr = INADDR_ANY;
+            // // bind
+            // if (bind(data_sd, (struct sockaddr *) &data_addr, sizeof(data_addr)) < 0)
+            // {
+            //     perror("bind failed");
+            //     exit(-1);
+            // }
+            // // listen
+            // if (listen(data_sd, 5) < 0) {
+            //     printf("Listen failed..\n");
+            //     exit(-1);
+            // }
 
-            // recieve output from the server and check if success
+            // // recieve output from the server and check if success
+            // bzero(response, sizeof(response));
+            // recv(client_sd, &response, sizeof(response), 0);
+            // printf("%s\n", response);
+
+            // // after the data transfer, increment data port by 1 for the future connection
+            // data_port++;
+            send(client_sd, buffer, sizeof(buffer), 0); // send command to server
             bzero(response, sizeof(response));
-            recv(client_sd, &response, sizeof(response), 0);
+            recv(client_sd, &response, sizeof(response), 0); // recieve output from the server
             printf("%s\n", response);
-
-            // after the data transfer, increment data port by 1 for the future connection
-            data_port++;
+            if (strcmp(response, "221 Service closing control connection.") == 0) { // close connection and terminate the program
+                break;
+            }
         }
         else {
             send(client_sd, buffer, sizeof(buffer), 0); // send command to server
             bzero(response, sizeof(response));
             recv(client_sd, &response, sizeof(response), 0); // recieve output from the server
+            printf("%s\n", response);
             if (strcmp(response, "221 Service closing control connection.") == 0) { // close connection and terminate the program
                 break;
             }
-            else
-                printf("%s\n", response);
         }
 	}
 	

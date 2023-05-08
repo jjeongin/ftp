@@ -210,19 +210,48 @@ int main()
 
                         // execute command
                         if (login_status[sd] == 2) { // if logged in
-                            // freopen("/dev/null", "a", stdout); // redirect stdout to response
-                            // setbuf(stdout, response);
                             if (strcmp(command, "LIST") == 0) {
-                                system("ls");
+                                // redirect stdout to response
+                                FILE *stdout_file = popen("ls", "r");
+                                if (stdout_file) {
+                                    bzero(response, sizeof(response));
+                                    while (fgets(line, sizeof(line), stdout_file)) {
+                                        strcat(response, line);
+                                    }
+                                    pclose(stdout_file);
+                                }
+                                response[strcspn(response, "\n")] = 0; // remove newline at the end
                             }
                             else if (strcmp(command, "CWD") == 0) {
-                                if (chdir(args) < 0) {
-                                    perror("Error: chdir() failed");
+                                if (chdir(args) < 0) { // CWD failed
+                                    sprintf(response, "550 No such file or directory");
                                 }
-                                // system("cd %s", args);
+                                else { // CWD successful
+                                    // redirect stdout to response
+                                    FILE *stdout_file = popen("pwd", "r");
+                                    if (stdout_file) {
+                                        bzero(response, sizeof(response));
+                                        sprintf(response, "200 directory changed to ");
+                                        while (fgets(line, sizeof(line), stdout_file)) {
+                                            strcat(response, line);
+                                        }
+                                        pclose(stdout_file);
+                                    }
+                                    response[strcspn(response, "\n")] = 0; // remove newline at the end
+                                }
                             }
                             else if (strcmp(command, "PWD") == 0) {
-                                system("pwd");
+                                // redirect stdout to response
+                                FILE *stdout_file = popen("pwd", "r");
+                                if (stdout_file) {
+                                    bzero(response, sizeof(response));
+                                    sprintf(response, "257 ");
+                                    while (fgets(line, sizeof(line), stdout_file)) {
+                                        strcat(response, line);
+                                    }
+                                    pclose(stdout_file);
+                                }
+                                response[strcspn(response, "\n")] = 0; // remove newline at the end
                             }
                             else if (strcmp(command, "PORT") == 0) {
                                 // printf("PORT command from %s\n", args); // TEST
@@ -307,6 +336,13 @@ int main()
                             else if (strcmp(command, "RETR")== 0) {
                                 break;
                             }
+                            else if (strcmp(command, "QUIT") == 0) {
+                                sprintf(response, "221 Service closing control connection.");
+                                FD_CLR(sd, &current_sockets); // remove client socket from current_sockets
+                            }
+                            else {
+                                sprintf(response, "503 Bad sequence of commands.");
+                            }
                         }
                         else { // trigger user authentication
                             if (strcmp(command, "USER") == 0) {
@@ -335,9 +371,16 @@ int main()
                                     sprintf(response, "530 Not logged in.");
                                 }
                             }
-                            else {
-                                // printf("In ELSE: login_status: %d\n", login_status[sd]); // TEST
+                            else if (strcmp(command, "QUIT") == 0) {
+                                sprintf(response, "221 Service closing control connection.");
+                                FD_CLR(sd, &current_sockets); // remove client socket from current_sockets
+                            }
+                            else if (!strcmp(command, "LIST") | !strcmp(command, "STOR") | !strcmp(command, "RETR") | 
+                                    !strcmp(command, "CWD") | !strcmp(command, "PWD")) { // valid commands but not authenticated
                                 sprintf(response, "530 Not logged in.");
+                            }
+                            else { // invalid commands
+                                sprintf(response, "503 Bad sequence of commands.");
                             }
                         }
                         
