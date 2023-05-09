@@ -15,24 +15,25 @@
 #define MAX_USERS 100
 #define MAX_USERNAME 300 // max username length
 #define MAX_PASSWORD 300
+#define MAX_FILENAME 100
 #define DATA_SIZE 1024
 
-void write_file(int socket, char* filename) {
+void write_file(int socket, char * filename) {
     // writing into file the data from the client
-    int n;
+    // int n;
     FILE *fp;
     char buffer[DATA_SIZE] = {0};
     fp = fopen(filename, "w");
-    if(NULL == fp)
+    if(fp == NULL)
     {
-       	printf("Error opening file");
-        return;
+       	perror("Error: creating file.");
+        exit(-1);
     }
-    while (1) {
-        n = recv(socket, buffer, sizeof(buffer), 0);
-        if (strncmp(buffer, "\0", 1) == 0){ // fix later
-            break;
-        } 
+    while (recv(socket, buffer, sizeof(buffer), 0) > 0) {
+        // n = recv(socket, buffer, sizeof(buffer), 0);
+        // if (strncmp(buffer, "\0", 1) == 0) { // fix later
+        //     break;
+        // }
         fputs(buffer, fp);
         bzero(buffer, DATA_SIZE);
     }
@@ -80,7 +81,7 @@ int main()
      * build the server's internet address
      */
     int port_no = 21; // server port number for control channel
-	struct sockaddr_in server_addr, new_addr;
+	struct sockaddr_in server_addr;
 	bzero((char *) &server_addr, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons((unsigned short) port_no);
@@ -136,14 +137,18 @@ int main()
     char buffer[MAX_BUFFER]; // user input from client
     char command[MAX_COMMAND];
     char * args;
-    char response[MAX_RESPONSE]; // response to client
+    char response[MAX_RESPONSE]; // response for control connection
+    char data_response[MAX_RESPONSE]; // response for data connection
     int login_status[FD_SETSIZE]; // keep track of login status of users
     for (int i = 0; i < FD_SETSIZE; i++) {
         login_status[i] = 0;
     }
     int user_i = 0; // user index of current user (< num_users)
-
-    char filename[MAX_BUFFER];
+    // for data connection
+    char data_address[1000]; // client address for data connection
+    unsigned int data_port; // client port for data connection
+    // for file upload/download
+    char filename[MAX_FILENAME];
     int new_socket;
     socklen_t addr_size;
     /*
@@ -193,7 +198,7 @@ int main()
                         exit(EXIT_FAILURE);
                     }
                     if (strcmp(buffer, "") != 0) { // if buffer is not empty
-                        //printf("From client_sd %d: \"%s\" \n", sd, buffer); // TEST
+                        // printf("From client_sd %d: \"%s\" \n", sd, buffer); // TEST
                         bzero(command, sizeof(command));
                         bzero(response, sizeof(response));
                         sprintf(response, "Default response");
@@ -205,24 +210,10 @@ int main()
                             args = strtok(NULL, delim); // second argument
                         }
                         // printf("command: %s\n", command); // TEST
-                        // if (strcmp(args, "") != 0)
-                        //     printf("args: %s\n", args); // TEST
 
                         // execute command
                         if (login_status[sd] == 2) { // if logged in
-                            if (strcmp(command, "LIST") == 0) {
-                                // redirect stdout to response
-                                FILE *stdout_file = popen("ls", "r");
-                                if (stdout_file) {
-                                    bzero(response, sizeof(response));
-                                    while (fgets(line, sizeof(line), stdout_file)) {
-                                        strcat(response, line);
-                                    }
-                                    pclose(stdout_file);
-                                }
-                                response[strcspn(response, "\n")] = 0; // remove newline at the end
-                            }
-                            else if (strcmp(command, "CWD") == 0) {
+                            if (strcmp(command, "CWD") == 0) {
                                 if (chdir(args) < 0) { // CWD failed
                                     sprintf(response, "550 No such file or directory");
                                 }
@@ -254,19 +245,16 @@ int main()
                                 response[strcspn(response, "\n")] = 0; // remove newline at the end
                             }
                             else if (strcmp(command, "PORT") == 0) {
-                                // printf("PORT command from %s\n", args); // TEST
                                 // parse user input into command and argument
-                                char * delim = ",";
-                                char data_address[1000];
-                                int data_port, p1, p2;
-                                char * token;
+                                char * addr_delim = ",";
+                                unsigned int p1, p2;
                                 int counter = 0;
-
-                                token = strtok(args, delim); // first token
+                                // bzero(data_address, sizeof(data_address));
+                                char * token = strtok(args, addr_delim); // first token
                                 strcpy(data_address, token); // copy first token
                                 counter++;
                                 while (token != NULL) {
-                                    token = strtok(NULL, delim); // get new token
+                                    token = strtok(NULL, addr_delim); // get new token
                                     if (counter < 4) {
                                         strcat(data_address, ".");
                                         strcat(data_address, token);
@@ -282,56 +270,138 @@ int main()
                                 // convert p1 and p2 to port
                                 data_port = (p1 * 256) + p2;
                                 printf("data address %s, data port %d\n", data_address, data_port); // TEST
-
-                                // // create new socket for data connection ??
-                                // int data_sd = socket(AF_INET, SOCK_STREAM, 0);
-                                // if (data_sd < 0) {
-                                //     perror("Error: socket() failed");
-                                //     exit(EXIT_FAILURE);
-                                // }
-                                // // set socket options
-                                // int opt = 1;
-                                // if (setsockopt(data_sd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
-                                //     perror("Error: setsockopt() failed");
-                                //     exit(EXIT_FAILURE);
-                                // }
-                                // // set socket address
-                                // struct sockaddr_in data_addr;
-                                // data_addr.sin_family = AF_INET;
-                                // data_addr.sin_addr.s_addr = INADDR_ANY;
-                                // data_addr.sin_port = htons(data_port);
-                                // // bind socket to address
-                                // if (bind(data_sd, (struct sockaddr *) &data_addr, sizeof(data_addr)) < 0) {
-                                //     perror("Error: bind() failed");
-                                //     exit(EXIT_FAILURE);
-                                // }
-                                // // listen for connections
-                                // if (listen(data_sd, 5) < 0) {
-                                //     perror("Error: listen() failed");
-                                //     exit(EXIT_FAILURE);
-                                // }
-                                // // accept a new conection from client
-                                // int data_client_sd = accept(data_sd, (struct sockaddr *) &data_addr, (socklen_t *) &addrlen);
-                                // if (data_client_sd < 0) {
-                                //     perror("Error: accept() failed");
-                                //     exit(EXIT_FAILURE);
-                                // }
                                 sprintf(response, "200 PORT command successful.");
-                                // close(data_sd); // close connections
-                                // close(data_client_sd);
+                            }
+                            else if (strcmp(command, "LIST") == 0) {
+                                // get ls output
+                                FILE *stdout_file = popen("ls", "r");
+                                if (stdout_file) {
+                                    bzero(data_response, sizeof(data_response));
+                                    while (fgets(line, sizeof(line), stdout_file)) {
+                                        strcat(data_response, line);
+                                    }
+                                    pclose(stdout_file);
+                                }
+                                data_response[strcspn(data_response, "\n")] = 0;
+                                // send file status success message
+                                sprintf(response, "150 File status okay; about to open data connection.");
+                                send(sd, response, sizeof(response), 0);
+                                // data connection
+                                int pid = fork();
+                                if (pid == 0) {
+                                    // create new socket for data connection
+                                    int data_server_sd = socket(AF_INET,SOCK_STREAM,0);
+                                    if (data_server_sd < 0)
+                                    {
+                                        perror("Error opening socket");
+                                        exit(-1);
+                                    }
+                                    int value  = 1;
+	                                setsockopt(data_server_sd, SOL_SOCKET, SO_REUSEADDR, (const void *) &value, sizeof(value));
+                                    // for data server socket
+                                    int data_port_no = 20; // port number for data connection
+                                    struct sockaddr_in data_server_addr;
+                                    bzero((char *) &data_server_addr, sizeof(data_server_addr));
+                                    data_server_addr.sin_family = AF_INET;
+                                    data_server_addr.sin_port = htons((unsigned short) data_port_no);
+                                    data_server_addr.sin_addr.s_addr = INADDR_ANY;
+                                    // bind: associate the parent socket with a port
+                                    if (bind(data_server_sd, (struct sockaddr *) &data_server_addr, sizeof(data_server_addr)) < 0)
+                                    {
+                                        perror("bind failed");
+                                        exit(-1);
+                                    }
+                                    // build address with client's data connection address and port
+                                    struct sockaddr_in data_addr; // to store data connection client address
+                                    bzero((char *) &data_addr, sizeof(data_addr));
+                                    data_addr.sin_family = AF_INET;
+                                    data_addr.sin_port = htons((unsigned short) data_port);
+                                    data_addr.sin_addr.s_addr = inet_addr(data_address);
+                                    socklen_t data_sd_len = sizeof(data_addr);
+                                    // // TEST ---
+                                    // char data_ip_test[1000];
+                                    // inet_ntop(AF_INET, &data_addr.sin_addr, data_ip_test, sizeof(data_ip_test));
+                                    // int data_port_test = ntohs(data_addr.sin_port);
+                                    // printf("Data IP to send: %s\n", data_ip_test);
+                                    // printf("Data Port to send: %d\n", data_port_test);
+                                    // connect
+                                    if (connect(data_server_sd, (struct sockaddr*) &data_addr, sizeof(data_addr)) < 0)
+                                    {
+                                        perror("Error: connect");
+                                        exit(-1);
+                                    }
+                                    send(data_server_sd, data_response, sizeof(data_response), 0);
+                                    close(data_server_sd); // close data connection
+                                    exit(0);
+                                }
+                                wait(NULL);
+                                sprintf(response, "226 Transfer completed.");
                             }
                             else if (strcmp(command, "STOR") == 0) {
-                                if (strcmp(args, "") != 0){
+                                if (strcmp(args, "") != 0) {
                                     strcpy(filename, args);
                                 }
                                 else {
-                                    printf("Error: empty filename");
+                                    perror("Error: empty filename.");
+                                    exit(-1);
                                 }
-                                write_file(sd, filename);
-                                sprintf(response, "Upload Successful");
+                                // create temp file
+                                char temp_filename[MAX_FILENAME+4];
+                                strcpy(temp_filename, filename);
+                                strcat(temp_filename, ".tmp");
+                                FILE *temp_file = fopen(temp_filename, "w");
+                                if (temp_file == NULL) {
+                                    perror("Error: creating temp file");
+                                    exit(-1);
+                                }
+                                // send file status success message
+                                sprintf(response, "150 File status okay; about to open data connection.");
                                 send(sd, response, sizeof(response), 0);
-                                printf("\nUpload Successful\n");
-                                break;
+                                // data connection
+                                int pid = fork();
+                                if (pid == 0) {
+                                    // create new socket for data connection
+                                    int data_server_sd = socket(AF_INET,SOCK_STREAM,0);
+                                    if (data_server_sd < 0)
+                                    {
+                                        perror("Error opening socket");
+                                        exit(-1);
+                                    }
+                                    int value  = 1;
+	                                setsockopt(data_server_sd, SOL_SOCKET, SO_REUSEADDR, (const void *) &value, sizeof(value));
+                                    // for data server socket
+                                    int data_port_no = 20; // port number for data connection
+                                    struct sockaddr_in data_server_addr;
+                                    bzero((char *) &data_server_addr, sizeof(data_server_addr));
+                                    data_server_addr.sin_family = AF_INET;
+                                    data_server_addr.sin_port = htons((unsigned short) data_port_no);
+                                    data_server_addr.sin_addr.s_addr = INADDR_ANY;
+                                    // bind: associate the parent socket with a port
+                                    if (bind(data_server_sd, (struct sockaddr *) &data_server_addr, sizeof(data_server_addr)) < 0)
+                                    {
+                                        perror("bind failed");
+                                        exit(-1);
+                                    }
+                                    // build address with client's data connection address and port
+                                    struct sockaddr_in data_addr; // to store data connection client address
+                                    bzero((char *) &data_addr, sizeof(data_addr));
+                                    data_addr.sin_family = AF_INET;
+                                    data_addr.sin_port = htons((unsigned short) data_port);
+                                    data_addr.sin_addr.s_addr = inet_addr(data_address);
+                                    socklen_t data_sd_len = sizeof(data_addr);
+                                    // connect
+                                    if (connect(data_server_sd, (struct sockaddr*) &data_addr, sizeof(data_addr)) < 0)
+                                    {
+                                        perror("Error: connect");
+                                        exit(-1);
+                                    }
+                                    write_file(data_server_sd, temp_filename); // upload file to temp file
+                                    close(data_server_sd); // close data connection
+                                    exit(0);
+                                }
+                                wait(NULL);
+                                rename(temp_filename, filename); // rename temp file to actual filename
+                                sprintf(response, "226 Transfer completed.");
             	            }
                             else if (strcmp(command, "RETR")== 0) {
                                 break;
