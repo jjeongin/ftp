@@ -39,23 +39,19 @@ void write_file(int socket, char* filename) {
     fclose(fp);
 }
 
-// void send_file(FILE* fp, int server_sd, char* buffer){
-//     printf("Sending buffer: -%s-\n", buffer);
-//     send(server_sd, buffer, MAX_BUFFER, 0);
-//     char data[DATA_SIZE] = {0};
-//     while(fgets(data,DATA_SIZE, fp) != NULL) {
-//         //printf("check3 \n");
-//         printf("Sending message: -%s-\n", data);
-//         if (send(server_sd, data, sizeof(data), 0) == -1) {
-//             //printf("check4 \n");
-//             perror("Error: sending file.");
-//             exit(1);
-//         }
-//     bzero(data, DATA_SIZE);
-//   }
-//   printf("ASD\n");
-//   send(server_sd, "\0", 1, 0);
-// }
+//funtion to send file that was downloaded
+void send_file(FILE* fp, int sd){
+    char data[DATA_SIZE] = {0};
+    while(fgets(data,DATA_SIZE, fp) != NULL) {
+      //  printf("Sending message: -%s-\n", data);
+        if (send(sd, data, sizeof(data), 0) == -1) {
+            perror("Error: sending file.");
+            break;
+        }
+    bzero(data, DATA_SIZE);
+    }
+  send(sd, "\0", 1, 0);
+}
 
 int main()
 {
@@ -328,12 +324,31 @@ int main()
                                     printf("Error: empty filename");
                                 }
                                 write_file(sd, filename);
-                                sprintf(response, "Upload Successful");
+                                sprintf(response, "200 Upload Successful");
                                 send(sd, response, sizeof(response), 0);
-                                printf("\nUpload Successful\n");
+                                //printf("\n200 Upload Successful\n");
                                 break;
             	            }
                             else if (strcmp(command, "RETR")== 0) {
+                                sprintf(response, "Success");
+                                send(sd, response, sizeof(response), 0);
+                                if (strcmp(args, "") != 0){
+                                    strcpy(filename, args);
+                                }
+                                else {
+                                    printf("Error: empty filename");
+                                }
+                                FILE *fp;
+                                fp = fopen(filename, "r");
+                                if (fp == NULL){
+                                    perror("Error: reading file");
+                                    exit(1);
+                                }
+                                send_file(fp, sd);
+                                fclose(fp);
+                            //    sprintf(response, "200 Download Successful");
+                            //    send(sd, response, sizeof(response), 0);
+                                //printf("\n200 Download Successful\n");
                                 break;
                             }
                             else if (strcmp(command, "QUIT") == 0) {

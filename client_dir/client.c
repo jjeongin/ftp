@@ -34,27 +34,27 @@ void send_file(FILE* fp, int server_sd, char* buffer){
   send(server_sd, "\0", 1, 0);
 }
 
-// void write_file(int socket, char* filename) {
-//     //writing into file the data from the client
-//     int n;
-//     FILE *fp;
-//     char buffer[DATA_SIZE] = {0};
-//     fp = fopen(filename, "w");
-//     if(NULL == fp)
-//     {
-//        	printf("Error opening file");
-//         return;
-//     }
-//     while (1) {
-//         n = recv(socket, buffer, sizeof(buffer), 0);
-//         if (strncmp(buffer, "\0", 1) == 0){ // fix later
-//             break;
-//         } 
-//         fputs(buffer, fp);
-//         bzero(buffer, DATA_SIZE);
-//     }
-//     fclose(fp);
-// }
+void write_file(int socket, char* filename) {
+    //writing into file the data from the client
+    int n;
+    FILE *fp;
+    char buffer[DATA_SIZE] = {0};
+    fp = fopen(filename, "w");
+    if(NULL == fp)
+    {
+       	printf("Error opening file");
+        return;
+    }
+    while (1) {
+        n = recv(socket, buffer, sizeof(buffer), 0);
+        if (strncmp(buffer, "\0", 1) == 0){ // fix later
+            break;
+        } 
+        fputs(buffer, fp);
+        bzero(buffer, DATA_SIZE);
+    }
+    fclose(fp);
+}
 
 int main()
 {
@@ -147,13 +147,24 @@ int main()
             printf("%s\n", response);
         }
         else if (strncmp(buffer, "RETR", 4) == 0) {
-            // fp = fopen(filename, "w");
-            // if (fp == NULL){
-            //     perror("Error: opening file");
-            //     exit(1);
-            // }
-            // write_file(server_sd, fp);
-            // fclose(fp);
+            char copy_buffer[MAX_BUFFER];
+            strcpy(copy_buffer, buffer);
+            char * delim = "\t\r\n ";
+            char * args = strtok(buffer, delim); // first argument
+            strcpy(command, args); // copy first argument into command
+            if (args != NULL) {
+                args = strtok(NULL, delim); // second argument
+            }
+            strcpy(filename, args); //copy second argument into filename
+            send(client_sd, copy_buffer, sizeof(buffer), 0); // send command to server
+            bzero(response, sizeof(response));
+            recv(client_sd, &response, sizeof(response), 0); // recieve output from the server
+           if (strcmp(response, "Success")== 0){
+            write_file(client_sd, filename);
+        }; 
+            // bzero(response, sizeof(response));
+            // recv(client_sd, &response, sizeof(response), 0); // recieve output from the server
+            printf("%s\n", response);
         }
         else if (strncmp(buffer, "LIST", 4) == 0) {
             // // PORT command
