@@ -99,7 +99,7 @@ int main()
     printf("Client IP: %s\n", client_ip);     // TEST
     printf("Client Port: %d\n", client_port); // TEST
 
-    // char filename[MAX_FILENAME];                                           // filename
+    char filename[MAX_FILENAME];                                           // filename
     char buffer[MAX_BUFFER];                                               // user input
     char command[MAX_COMMAND];                                             // command (LIST, PWD, CWD, etc.)
     char response[MAX_RESPONSE];                                           // response from server
@@ -143,22 +143,6 @@ int main()
         }
         else if (strncmp(buffer, "STOR", 4) == 0)
         {
-            // get filename to send
-            char * delim = "\t\r\n ";
-            char * args = strtok(buffer, delim); // first argument
-            strcpy(command, args);              // copy first argument into command
-            if (args != NULL)
-            {
-                args = strtok(NULL, delim); // second argument
-                printf("args: %s\n", args); // TEST
-            }
-            printf("command: %s\n", command); // TEST
-            if (args == nullptr) 
-            {
-                printf("503 Bad sequence of commands.\n");
-                continue;
-            }
-            
             port_command = get_port_command(client_ip, data_port);  // generate port command
             send(client_sd, port_command, strlen(port_command), 0); // send PORT command to server
             // receive PORT success message
@@ -169,21 +153,23 @@ int main()
             {
                 // send STOR command to server
                 send(client_sd, buffer, sizeof(buffer), 0);
-                // // get filename to send
-                // char *delim = "\t\r\n ";
-                // char *args = strtok(buffer, delim); // first argument
-                // strcpy(command, args);              // copy first argument into command
-                // if (args != NULL)
-                // {
-                //     args = strtok(NULL, delim); // second argument
-                // }
-                // else 
-                // {
-                //     printf("503 Bad sequence of commands.\n");
-                //     continue;
-                // }
+                // get filename to send
+                char *delim = "\t\r\n ";
+                char *args = strtok(buffer, delim); // first argument
+                strcpy(command, args);              // copy first argument into command
+                if (args != NULL)
+                {
+                    args = strtok(NULL, delim); // second argument
+                }
+                else 
+                {
+                    printf("503 Bad sequence of commands.\n");
+                    continue;
+                }
+                bzero(filename, sizeof(filename));
+                strcpy(filename, args);
                 // open file to send
-                FILE *fp = fopen(args, "r");
+                FILE *fp = fopen(filename, "r");
                 if (fp == NULL)
                 {
                     printf("550 No such file or directory.\n");
@@ -225,20 +211,23 @@ int main()
                     bzero(response, sizeof(response));
                     recv(client_sd, &response, sizeof(response), 0);
                     printf("%s\n", response);
-                    // accept data connection from server
-                    struct sockaddr_in data_server_addr; // to store data server address
-                    int data_server_addrlen = sizeof(data_server_addr);
-                    int data_server_sd = accept(data_sd, (struct sockaddr *)&data_server_addr, (socklen_t *)&data_server_addrlen);
-                    if (data_server_sd < 0)
+                    if (strcmp(response, "150 File status okay; about to open data connection.") == 0)
                     {
-                        printf("Error: accept failed\n");
-                        exit(EXIT_FAILURE);
+                        // accept data connection from server
+                        struct sockaddr_in data_server_addr; // to store data server address
+                        int data_server_addrlen = sizeof(data_server_addr);
+                        int data_server_sd = accept(data_sd, (struct sockaddr *)&data_server_addr, (socklen_t *)&data_server_addrlen);
+                        if (data_server_sd < 0)
+                        {
+                            printf("Error: accept failed\n");
+                            exit(EXIT_FAILURE);
+                        }
+                        // upload file
+                        send_file(fp, data_server_sd);
+                        fclose(fp);
+                        close(data_server_sd);
                     }
-                    // upload file
-                    send_file(fp, data_server_sd);
-                    fclose(fp);
                     // close data connection
-                    close(data_server_sd);
                     close(data_sd);
                     exit(0);
                 }
@@ -320,19 +309,22 @@ int main()
                     bzero(response, sizeof(response));
                     recv(client_sd, &response, sizeof(response), 0);
                     printf("%s\n", response);
-                    // accept data connection from server
-                    struct sockaddr_in data_server_addr; // to store data server address
-                    int data_server_addrlen = sizeof(data_server_addr);
-                    int data_server_sd = accept(data_sd, (struct sockaddr *)&data_server_addr, (socklen_t *)&data_server_addrlen);
-                    if (data_server_sd < 0)
+                    if (strcmp(response, "150 File status okay; about to open data connection.") == 0)
                     {
-                        printf("Error: accept failed\n");
-                        exit(EXIT_FAILURE);
+                        // accept data connection from server
+                        struct sockaddr_in data_server_addr; // to store data server address
+                        int data_server_addrlen = sizeof(data_server_addr);
+                        int data_server_sd = accept(data_sd, (struct sockaddr *)&data_server_addr, (socklen_t *)&data_server_addrlen);
+                        if (data_server_sd < 0)
+                        {
+                            printf("Error: accept failed\n");
+                            exit(EXIT_FAILURE);
+                        }
+                        // download file
+                        write_file(fp, data_server_sd);
+                        fclose(fp);
+                        close(data_server_sd); // close data connection
                     }
-                    // download file
-                    write_file(fp, data_server_sd);
-                    fclose(fp);
-                    close(data_server_sd); // close data connection
                     close(data_sd);
                     exit(0);
                 }

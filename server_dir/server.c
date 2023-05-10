@@ -194,6 +194,7 @@ int main()
                     }
                     if (strcmp(buffer, "") != 0)
                     { // if buffer is not empty
+                        // printf("From client_sd %d: \"%s\" \n", sd, buffer); // TEST
                         bzero(command, sizeof(command));
                         bzero(response, sizeof(response));
                         sprintf(response, "Default response");
@@ -353,9 +354,17 @@ int main()
                             }
                             else if (strcmp(command, "STOR") == 0)
                             {
+                                bzero(filename, sizeof(filename));
+                                if (args != NULL & strcmp(args, "") != 0) {
+                                    strcpy(filename, args);
+                                }
+                                else {
+                                    perror("Error: empty filename.");
+                                    exit(-1);
+                                }
                                 // create temp file
                                 char temp_filename[MAX_FILENAME + 4];
-                                strcpy(temp_filename, args);
+                                strcpy(temp_filename, filename);
                                 strcat(temp_filename, ".tmp");
                                 FILE *fp = fopen(temp_filename, "w");
                                 if (fp == NULL)
@@ -413,13 +422,17 @@ int main()
                                     exit(0);
                                 }
                                 wait(NULL);
-                                rename(temp_filename, args); // rename temp file to actual filename
+                                rename(temp_filename, filename); // rename temp file to actual filename
+                                // printf("renaming successful!\n"); // TEST
                                 sprintf(response, "226 Transfer completed.");
                             }
                             else if (strcmp(command, "RETR") == 0)
                             {
+                                // get filename to send
+                                bzero(filename, sizeof(filename));
+                                strcpy(filename, args); // get filename from argument
                                 // open file to send
-                                FILE *fp = fopen(args, "r");
+                                FILE *fp = fopen(filename, "r");
                                 if (fp == NULL)
                                 {
                                     sprintf(response, "550 No such file or directory.");
@@ -488,8 +501,8 @@ int main()
                                 sprintf(response, "503 Bad sequence of commands.");
                             }
                         }
-                        else // user authentication needed
-                        {
+                        else
+                        { // trigger user authentication
                             if (strcmp(command, "USER") == 0)
                             {
                                 for (int i = 0; i < num_users; i++)
@@ -498,7 +511,7 @@ int main()
                                     {                         // username found
                                         login_status[sd] = 1; // indicates username has been authenticated
                                         user_i = i;           // set user index to the current index (to find the matching password)
-                                        // printf("username found: %s\n", usernames[i]); // TEST
+                                        // printf("username found: %s\n", usernames[i]);
                                         // printf("user_i %d\n", user_i);
                                         sprintf(response, "331 User name OK, need password.");
                                         break;
@@ -506,12 +519,13 @@ int main()
                                 }
                                 if (login_status[sd] == 0)
                                 { // failed to authenticate
+                                    // printf("In USER: login_status: %d\n", login_status[sd]); // TEST
                                     sprintf(response, "530 Not logged in.");
                                 }
                             }
                             else if (strcmp(command, "PASS") == 0 && login_status[sd] == 1)
                             {
-                                if (strcmp(args, passwords[user_i]) == 0) // password matches
+                                if (strcmp(args, passwords[user_i]) == 0) 
                                 {
                                     login_status[sd] = 2; // indicates username has been authenticated
                                     sprintf(response, "230 User logged in, proceed.");
