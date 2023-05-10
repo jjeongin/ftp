@@ -116,11 +116,11 @@ int main()
     //     free(line);
     // }
     // TEST - print out all existing usernames, passwords
-    for (int i = 0; i < num_users; i++)
-    {
-        printf("username: \"%s\"\n", usernames[i]);
-        printf("password: \"%s\"\n", passwords[i]);
-    }
+    // for (int i = 0; i < num_users; i++)
+    // {
+    //     printf("username: \"%s\"\n", usernames[i]);
+    //     printf("password: \"%s\"\n", passwords[i]);
+    // }
     /*
      * GLOBAL VARIABLES
      */
@@ -165,8 +165,6 @@ int main()
                     // accept a new conection from client
                     struct sockaddr_in client_addr;
                     int addrlen = sizeof(client_addr);
-                    char client_ip[16];
-                    unsigned int client_port;
                     int client_sd = accept(server_sd, (struct sockaddr *)&client_addr, (socklen_t *)&addrlen);
                     if (client_sd < 0)
                     {
@@ -179,18 +177,20 @@ int main()
                         max_sd = client_sd;
                     }
                     // print client IP and Port number for this connection // TEST
-                    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
-                    client_port = ntohs(client_addr.sin_port);
-                    printf("Client IP: %s\n", client_ip);
-                    printf("Client Port: %d\n", client_port);
+                    // char client_ip[16];
+                    // unsigned int client_port;
+                    // inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+                    // client_port = ntohs(client_addr.sin_port);
+                    // printf("Client IP: %s\n", client_ip);
+                    // printf("Client Port: %d\n", client_port);
                 }
                 else
                 {
                     bzero(buffer, sizeof(buffer)); // place null bytes in the buffer
-                    if (read(sd, (void *)&buffer, sizeof(buffer)) < 0)
-                    { // read from buffer
+                    if (read(sd, (void *)&buffer, sizeof(buffer)) < 0) // read from buffer
+                    { 
                         printf("Error: read failed\n");
-                        exit(EXIT_FAILURE);
+                        continue;
                     }
                     if (strcmp(buffer, "") != 0)
                     { // if buffer is not empty
@@ -206,7 +206,7 @@ int main()
                         {
                             args = strtok(NULL, delim); // second argument
                         }
-                        printf("command: %s\n", command); // TEST
+                        // printf("command: %s\n", command); // TEST
 
                         // execute command
                         if (login_status[sd] == 2)
@@ -280,7 +280,7 @@ int main()
                                 }
                                 // convert p1 and p2 to port
                                 data_port = (p1 * 256) + p2;
-                                printf("data address %s, data port %d\n", data_address, data_port); // TEST
+                                // printf("data address %s, data port %d\n", data_address, data_port); // TEST
                                 sprintf(response, "200 PORT command successful.");
                             }
                             else if (strcmp(command, "LIST") == 0)
@@ -332,7 +332,6 @@ int main()
                                     data_addr.sin_family = AF_INET;
                                     data_addr.sin_port = htons((unsigned short)data_port);
                                     data_addr.sin_addr.s_addr = inet_addr(data_address);
-                                    socklen_t data_sd_len = sizeof(data_addr);
                                     // // TEST ---
                                     // char data_ip_test[1000];
                                     // inet_ntop(AF_INET, &data_addr.sin_addr, data_ip_test, sizeof(data_ip_test));
@@ -354,14 +353,9 @@ int main()
                             }
                             else if (strcmp(command, "STOR") == 0)
                             {
+                                // copy filename
                                 bzero(filename, sizeof(filename));
-                                if (args != NULL & strcmp(args, "") != 0) {
-                                    strcpy(filename, args);
-                                }
-                                else {
-                                    perror("Error: empty filename.");
-                                    exit(-1);
-                                }
+                                strcpy(filename, args);
                                 // create temp file
                                 char temp_filename[MAX_FILENAME + 4];
                                 strcpy(temp_filename, filename);
@@ -369,74 +363,7 @@ int main()
                                 FILE *fp = fopen(temp_filename, "w");
                                 if (fp == NULL)
                                 {
-                                    perror("Error: creating temp file");
-                                    exit(-1);
-                                }
-                                // send file status success message
-                                sprintf(response, "150 File status okay; about to open data connection.");
-                                send(sd, response, sizeof(response), 0);
-                                // data connection
-                                int pid = fork();
-                                if (pid == 0)
-                                {
-                                    // create new socket for data connection
-                                    int data_server_sd = socket(AF_INET, SOCK_STREAM, 0);
-                                    if (data_server_sd < 0)
-                                    {
-                                        perror("Error opening socket");
-                                        exit(-1);
-                                    }
-                                    int value = 1;
-                                    setsockopt(data_server_sd, SOL_SOCKET, SO_REUSEADDR, (const void *)&value, sizeof(value));
-                                    // for data server socket
-                                    int data_port_no = 20; // port number for data connection
-                                    struct sockaddr_in data_server_addr;
-                                    bzero((char *)&data_server_addr, sizeof(data_server_addr));
-                                    data_server_addr.sin_family = AF_INET;
-                                    data_server_addr.sin_port = htons((unsigned short)data_port_no);
-                                    data_server_addr.sin_addr.s_addr = INADDR_ANY;
-                                    // bind: associate the parent socket with a port
-                                    if (bind(data_server_sd, (struct sockaddr *)&data_server_addr, sizeof(data_server_addr)) < 0)
-                                    {
-                                        perror("bind failed");
-                                        exit(-1);
-                                    }
-                                    // build address with client's data connection address and port
-                                    struct sockaddr_in data_addr; // to store data connection client address
-                                    bzero((char *)&data_addr, sizeof(data_addr));
-                                    data_addr.sin_family = AF_INET;
-                                    data_addr.sin_port = htons((unsigned short)data_port);
-                                    data_addr.sin_addr.s_addr = inet_addr(data_address);
-                                    socklen_t data_sd_len = sizeof(data_addr);
-                                    // connect
-                                    if (connect(data_server_sd, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0)
-                                    {
-                                        perror("Error: connect");
-                                        exit(-1);
-                                    }
-                                    // download file
-                                    write_file(fp, data_server_sd);
-                                    fclose(fp);
-                                    // close data connection
-                                    close(data_server_sd);
-                                    exit(0);
-                                }
-                                wait(NULL);
-                                rename(temp_filename, filename); // rename temp file to actual filename
-                                // printf("renaming successful!\n"); // TEST
-                                sprintf(response, "226 Transfer completed.");
-                            }
-                            else if (strcmp(command, "RETR") == 0)
-                            {
-                                // get filename to send
-                                bzero(filename, sizeof(filename));
-                                strcpy(filename, args); // get filename from argument
-                                // open file to send
-                                FILE *fp = fopen(filename, "r");
-                                if (fp == NULL)
-                                {
-                                    sprintf(response, "550 No such file or directory.");
-                                    send(sd, response, sizeof(response), 0);
+                                    printf("Error: creating temp file\n"); // server error log
                                     continue;
                                 }
                                 // send file status success message
@@ -472,73 +399,163 @@ int main()
                                     struct sockaddr_in data_addr; // to store data connection client address
                                     bzero((char *)&data_addr, sizeof(data_addr));
                                     data_addr.sin_family = AF_INET;
-                                    data_addr.sin_port = htons((unsigned short)data_port);
-                                    data_addr.sin_addr.s_addr = inet_addr(data_address);
-                                    socklen_t data_sd_len = sizeof(data_addr);
+                                    data_addr.sin_port = htons((unsigned short) data_port);
+                                    data_addr.sin_addr.s_addr = inet_addr(data_address); 
                                     // connect
-                                    if (connect(data_server_sd, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0)
+                                    if (connect(data_server_sd, (struct sockaddr *) &data_addr, sizeof(data_addr)) < 0)
                                     {
                                         perror("Error: connect");
                                         exit(-1);
                                     }
-                                    // upload file
-                                    send_file(fp, data_server_sd);
+                                    // download file
+                                    write_file(fp, data_server_sd);
                                     fclose(fp);
                                     // close data connection
                                     close(data_server_sd);
                                     exit(0);
                                 }
                                 wait(NULL);
+                                rename(temp_filename, filename); // rename temp file to actual filename
                                 sprintf(response, "226 Transfer completed.");
+                            }
+                            else if (strcmp(command, "RETR") == 0)
+                            {
+                                if (args == NULL || strcmp(args, "") == 0)
+                                {
+                                    sprintf(response, "503 Bad sequence of commands.");
+                                }
+                                else
+                                {
+                                    // get filename to send
+                                    bzero(filename, sizeof(filename));
+                                    strcpy(filename, args); // get filename from argument
+                                    // open file to send
+                                    FILE *fp = fopen(filename, "r");
+                                    if (fp == NULL)
+                                    {
+                                        sprintf(response, "550 No such file or directory.");
+                                    }
+                                    else
+                                    {
+                                        // send file status success message
+                                        sprintf(response, "150 File status okay; about to open data connection.");
+                                        send(sd, response, sizeof(response), 0);
+                                        // data connection
+                                        int pid = fork();
+                                        if (pid == 0)
+                                        {
+                                            // create new socket for data connection
+                                            int data_server_sd = socket(AF_INET, SOCK_STREAM, 0);
+                                            if (data_server_sd < 0)
+                                            {
+                                                perror("Error opening socket");
+                                                exit(-1);
+                                            }
+                                            int value = 1;
+                                            setsockopt(data_server_sd, SOL_SOCKET, SO_REUSEADDR, (const void *)&value, sizeof(value));
+                                            // for data server socket
+                                            int data_port_no = 20; // port number for data connection
+                                            struct sockaddr_in data_server_addr;
+                                            bzero((char *)&data_server_addr, sizeof(data_server_addr));
+                                            data_server_addr.sin_family = AF_INET;
+                                            data_server_addr.sin_port = htons((unsigned short)data_port_no);
+                                            data_server_addr.sin_addr.s_addr = INADDR_ANY;
+                                            // bind: associate the parent socket with a port
+                                            if (bind(data_server_sd, (struct sockaddr *)&data_server_addr, sizeof(data_server_addr)) < 0)
+                                            {
+                                                perror("bind failed");
+                                                exit(-1);
+                                            }
+                                            // build address with client's data connection address and port
+                                            struct sockaddr_in data_addr; // to store data connection client address
+                                            bzero((char *)&data_addr, sizeof(data_addr));
+                                            data_addr.sin_family = AF_INET;
+                                            data_addr.sin_port = htons((unsigned short)data_port);
+                                            data_addr.sin_addr.s_addr = inet_addr(data_address);
+                                            // connect
+                                            if (connect(data_server_sd, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0)
+                                            {
+                                                perror("Error: connect");
+                                                exit(-1);
+                                            }
+                                            // upload file
+                                            send_file(fp, data_server_sd);
+                                            fclose(fp);
+                                            // close data connection
+                                            close(data_server_sd);
+                                            exit(0);
+                                        }
+                                        wait(NULL);
+                                        sprintf(response, "226 Transfer completed.");
+                                    }
+                                }
                             }
                             else if (strcmp(command, "QUIT") == 0)
                             {
                                 sprintf(response, "221 Service closing control connection.");
                                 FD_CLR(sd, &current_sockets); // remove client socket from current_sockets
+                                close(sd); // close client socket
                             }
                             else
                             {
                                 sprintf(response, "503 Bad sequence of commands.");
                             }
                         }
-                        else
-                        { // trigger user authentication
+                        else // trigger user authentication
+                        {
                             if (strcmp(command, "USER") == 0)
                             {
-                                for (int i = 0; i < num_users; i++)
+                                if (args != NULL)
                                 {
-                                    if (strcmp(args, usernames[i]) == 0)
-                                    {                         // username found
-                                        login_status[sd] = 1; // indicates username has been authenticated
-                                        user_i = i;           // set user index to the current index (to find the matching password)
-                                        // printf("username found: %s\n", usernames[i]);
-                                        // printf("user_i %d\n", user_i);
-                                        sprintf(response, "331 User name OK, need password.");
-                                        break;
+                                    for (int i = 0; i < num_users; i++)
+                                    {
+                                        if (strcmp(args, usernames[i]) == 0)
+                                        {                         // username found
+                                            login_status[sd] = 1; // indicates username has been authenticated
+                                            user_i = i;           // set user index to the current index (to find the matching password)
+                                            // printf("username found: %s\n", usernames[i]);
+                                            // printf("user_i %d\n", user_i);
+                                            sprintf(response, "331 User name OK, need password.");
+                                            break;
+                                        }
+                                    }
+                                    if (login_status[sd] == 0)
+                                    { // failed to authenticate
+                                        // printf("In USER: login_status: %d\n", login_status[sd]); // TEST
+                                        sprintf(response, "530 Not logged in.");
                                     }
                                 }
-                                if (login_status[sd] == 0)
-                                { // failed to authenticate
-                                    // printf("In USER: login_status: %d\n", login_status[sd]); // TEST
-                                    sprintf(response, "530 Not logged in.");
+                                else 
+                                {
+                                    printf("args is NULL!\n");
+                                    sprintf(response, "503 Bad sequence of commands.");
                                 }
                             }
-                            else if (strcmp(command, "PASS") == 0 && login_status[sd] == 1)
+                            else if (strcmp(command, "PASS") == 0)
                             {
-                                if (strcmp(args, passwords[user_i]) == 0) 
+                                if (args != NULL)
                                 {
-                                    login_status[sd] = 2; // indicates username has been authenticated
-                                    sprintf(response, "230 User logged in, proceed.");
+                                    if (login_status[sd] == 1 && strcmp(args, passwords[user_i]) == 0) 
+                                    {
+                                        login_status[sd] = 2; // indicates username has been authenticated
+                                        sprintf(response, "230 User logged in, proceed.");
+                                    }
+                                    else // failed to authenticate
+                                    {
+                                        sprintf(response, "530 Not logged in.");
+                                    }
                                 }
-                                else // failed to authenticate
+                                else
                                 {
-                                    sprintf(response, "530 Not logged in.");
+                                    printf("args is NULL!\n");
+                                    sprintf(response, "503 Bad sequence of commands.");
                                 }
                             }
                             else if (strcmp(command, "QUIT") == 0)
                             {
                                 sprintf(response, "221 Service closing control connection.");
                                 FD_CLR(sd, &current_sockets); // remove client socket from current_sockets
+                                close(sd); // close client socket
                             }
                             // valid commands but not authenticated
                             else if (!strcmp(command, "LIST") | !strcmp(command, "STOR") | !strcmp(command, "RETR") |

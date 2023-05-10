@@ -27,7 +27,6 @@ void write_file(FILE *fp, int socket)
         fputs(data, fp);
         bzero(data, sizeof(data));
     }
-
 }
 
 void send_file(FILE *fp, int socket)
@@ -96,8 +95,8 @@ int main()
     client_port = ntohs(client_addr.sin_port);
     // port number for data channel
     unsigned int data_port = client_port + 1;
-    printf("Client IP: %s\n", client_ip);     // TEST
-    printf("Client Port: %d\n", client_port); // TEST
+    // printf("Client IP: %s\n", client_ip);     // TEST
+    // printf("Client Port: %d\n", client_port); // TEST
 
     char filename[MAX_FILENAME];                                           // filename
     char buffer[MAX_BUFFER];                                               // user input
@@ -110,10 +109,10 @@ int main()
         bzero(command, sizeof(command));
         printf("ftp> ");
         fgets(buffer, sizeof(buffer), stdin); // get user input and store it in the buffer
-        if (buffer[0] == '!') // client command
+        if (buffer[0] == '!')                 // client command
         {
             // parse user input to command and args
-            char *delim = "\t\r\n ";
+            char *delim = "\t\n ";
             char *args = strtok(buffer, delim); // first argument
             strcpy(command, args);              // copy first argument into command
             if (args != NULL)
@@ -149,94 +148,101 @@ int main()
             bzero(response, sizeof(response));
             recv(client_sd, &response, sizeof(response), 0);
             printf("%s\n", response);
-            if (strcmp(response, "200 PORT command successful.") == 0) // PORT command successful
+            if (strcmp(response, "200 PORT command successful.") == 0) // if PORT successful
             {
-                // send STOR command to server
-                send(client_sd, buffer, sizeof(buffer), 0);
-                // get filename to send
-                char *delim = "\t\r\n ";
+                // save buffer temporarily
+                char temp_buffer[MAX_BUFFER];
+                strcpy(temp_buffer, buffer); // copy buffer
+                // parse user input
+                char *delim = "\t\n ";
                 char *args = strtok(buffer, delim); // first argument
                 strcpy(command, args);              // copy first argument into command
                 if (args != NULL)
                 {
                     args = strtok(NULL, delim); // second argument
                 }
-                else 
+                // if no filename specified
+                if (args == NULL || strcmp(args, "") == 0)
                 {
                     printf("503 Bad sequence of commands.\n");
-                    continue;
                 }
-                bzero(filename, sizeof(filename));
-                strcpy(filename, args);
-                // open file to send
-                FILE *fp = fopen(filename, "r");
-                if (fp == NULL)
+                else
                 {
-                    printf("550 No such file or directory.\n");
-                    continue;
-                }
-                // open data connection
-                int pid = fork();
-                if (pid == 0)
-                {
-                    // open new data connection
-                    int data_sd = socket(AF_INET, SOCK_STREAM, 0);
-                    if (data_sd < 0)
+                    bzero(filename, sizeof(filename)); // copy filename
+                    strcpy(filename, args);
+                    // open file to send
+                    FILE *fp = fopen(filename, "r");
+                    if (fp == NULL)
                     {
-                        perror("Error opening socket");
-                        exit(-1);
+                        printf("550 No such file or directory.\n");
                     }
-                    // set socket option (to rerun the server immediately after we kill it)
-                    int value = 1;
-                    setsockopt(data_sd, SOL_SOCKET, SO_REUSEADDR, (const void *)&value, sizeof(value));
-                    // build data address at data_port
-                    struct sockaddr_in data_addr;
-                    bzero((char *)&data_addr, sizeof(data_addr));
-                    data_addr.sin_family = AF_INET;
-                    data_addr.sin_port = htons((unsigned short)data_port);
-                    data_addr.sin_addr.s_addr = INADDR_ANY;
-                    // bind
-                    if (bind(data_sd, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0)
+                    else
                     {
-                        printf("Error: could not bind to process (%d) %s\n", errno, strerror(errno));
-                        exit(-1);
-                    }
-                    // listen
-                    if (listen(data_sd, 5) < 0)
-                    {
-                        printf("Listen failed..\n");
-                        exit(-1);
-                    }
-                    // receive file ready to transfer message
-                    bzero(response, sizeof(response));
-                    recv(client_sd, &response, sizeof(response), 0);
-                    printf("%s\n", response);
-                    if (strcmp(response, "150 File status okay; about to open data connection.") == 0)
-                    {
-                        // accept data connection from server
-                        struct sockaddr_in data_server_addr; // to store data server address
-                        int data_server_addrlen = sizeof(data_server_addr);
-                        int data_server_sd = accept(data_sd, (struct sockaddr *)&data_server_addr, (socklen_t *)&data_server_addrlen);
-                        if (data_server_sd < 0)
+                        // send STOR command to server
+                        send(client_sd, temp_buffer, sizeof(temp_buffer), 0);
+                        // receive file ready to transfer message
+                        bzero(response, sizeof(response));
+                        recv(client_sd, &response, sizeof(response), 0);
+                        printf("%s\n", response);
+                        if (strcmp(response, "150 File status okay; about to open data connection.") == 0)
                         {
-                            printf("Error: accept failed\n");
-                            exit(EXIT_FAILURE);
+                            // open data connection
+                            int pid = fork();
+                            if (pid == 0)
+                            {
+                                // open new data connection
+                                int data_sd = socket(AF_INET, SOCK_STREAM, 0);
+                                if (data_sd < 0)
+                                {
+                                    perror("Error opening socket");
+                                    exit(-1);
+                                }
+                                // set socket option (to rerun the server immediately after we kill it)
+                                int value = 1;
+                                setsockopt(data_sd, SOL_SOCKET, SO_REUSEADDR, (const void *)&value, sizeof(value));
+                                // build data address at data_port
+                                struct sockaddr_in data_addr;
+                                bzero((char *)&data_addr, sizeof(data_addr));
+                                data_addr.sin_family = AF_INET;
+                                data_addr.sin_port = htons((unsigned short) data_port);
+                                data_addr.sin_addr.s_addr = INADDR_ANY;
+                                // bind
+                                if (bind(data_sd, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0)
+                                {
+                                    printf("Error: could not bind to process (%d) %s\n", errno, strerror(errno));
+                                    exit(-1);
+                                }
+                                // listen
+                                if (listen(data_sd, 5) < 0)
+                                {
+                                    printf("Listen failed..\n");
+                                    exit(-1);
+                                }
+                                // accept data connection from server
+                                struct sockaddr_in data_server_addr; // to store data server address
+                                int data_server_addrlen = sizeof(data_server_addr);
+                                int data_server_sd = accept(data_sd, (struct sockaddr *)&data_server_addr, (socklen_t *)&data_server_addrlen);
+                                if (data_server_sd < 0)
+                                {
+                                    printf("Error: accept failed\n");
+                                    exit(EXIT_FAILURE);
+                                }
+                                // upload file
+                                send_file(fp, data_server_sd);
+                                fclose(fp);
+                                close(data_server_sd); // close data connection
+                                close(data_sd);
+                                exit(0);
+                            }
+                            wait(NULL);                        // wait for child process to finish
+                            bzero(response, sizeof(response)); // wait for the Transfer success message
+                            recv(client_sd, &response, sizeof(response), 0);
+                            printf("%s\n", response);
+                            // after the data transfer, increment data port by 1 for the future connection
+                            data_port++;
                         }
-                        // upload file
-                        send_file(fp, data_server_sd);
-                        fclose(fp);
-                        close(data_server_sd);
                     }
-                    // close data connection
-                    close(data_sd);
-                    exit(0);
                 }
-                wait(NULL);                        // wait for child process to finish
-                bzero(response, sizeof(response)); // wait for the Transfer success message
-                recv(client_sd, &response, sizeof(response), 0);
-                printf("%s\n", response);
-                // after the data transfer, increment data port by 1 for the future connection
-                data_port++;
             }
         }
         else if (strncmp(buffer, "RETR", 4) == 0)
@@ -336,6 +342,98 @@ int main()
                 // after the data transfer, increment data port by 1 for the future connection
                 data_port++;
             }
+            // port_command = get_port_command(client_ip, data_port);  // generate port command
+            // send(client_sd, port_command, strlen(port_command), 0); // send PORT command to server
+            // // receive PORT success message
+            // bzero(response, sizeof(response));
+            // recv(client_sd, &response, sizeof(response), 0);
+            // printf("%s\n", response);
+            // if (strcmp(response, "200 PORT command successful.") == 0) // if PORT successful
+            // {
+            //     send(client_sd, buffer, sizeof(buffer), 0); // send RETR command to server
+            //     // receive file ready to transfer message
+            //     bzero(response, sizeof(response));
+            //     recv(client_sd, &response, sizeof(response), 0);
+            //     printf("%s\n", response);
+            //     if (strcmp(response, "150 File status okay; about to open data connection.") == 0)
+            //     {
+            //         // parse user input
+            //         char *delim = "\t\n ";
+            //         char *args = strtok(buffer, delim); // first argument
+            //         strcpy(command, args);              // copy first argument into command
+            //         if (args != NULL)
+            //         {
+            //             args = strtok(NULL, delim); // second argument
+            //         }
+            //         bzero(filename, sizeof(filename)); // copy filename
+            //         strcpy(filename, args);
+            //         // create temp file
+            //         char temp_filename[MAX_FILENAME + 4];
+            //         strcpy(temp_filename, filename);
+            //         strcat(temp_filename, ".tmp");
+            //         FILE *fp = fopen(temp_filename, "w");
+            //         if (fp == NULL)
+            //         {
+            //             perror("Error: creating temp file");
+            //             exit(-1);
+            //         }
+            //         // open data connection
+            //         int pid = fork();
+            //         if (pid == 0)
+            //         {
+            //             // open new data connection
+            //             int data_sd = socket(AF_INET, SOCK_STREAM, 0);
+            //             if (data_sd < 0)
+            //             {
+            //                 perror("Error opening socket");
+            //                 exit(-1);
+            //             }
+            //             // set socket option (to rerun the server immediately after we kill it)
+            //             int value = 1;
+            //             setsockopt(data_sd, SOL_SOCKET, SO_REUSEADDR, (const void *)&value, sizeof(value));
+            //             // build data address at data_port
+            //             struct sockaddr_in data_addr;
+            //             bzero((char *)&data_addr, sizeof(data_addr));
+            //             data_addr.sin_family = AF_INET;
+            //             data_addr.sin_port = htons((unsigned short)data_port);
+            //             data_addr.sin_addr.s_addr = INADDR_ANY;
+            //             // bind
+            //             if (bind(data_sd, (struct sockaddr *)&data_addr, sizeof(data_addr)) < 0)
+            //             {
+            //                 printf("Error: could not bind to process (%d) %s\n", errno, strerror(errno));
+            //                 exit(-1);
+            //             }
+            //             // listen
+            //             if (listen(data_sd, 5) < 0)
+            //             {
+            //                 printf("Listen failed..\n");
+            //                 exit(-1);
+            //             }
+            //             // accept data connection from server
+            //             struct sockaddr_in data_server_addr; // to store data server address
+            //             int data_server_addrlen = sizeof(data_server_addr);
+            //             int data_server_sd = accept(data_sd, (struct sockaddr *)&data_server_addr, (socklen_t *)&data_server_addrlen);
+            //             if (data_server_sd < 0)
+            //             {
+            //                 printf("Error: accept failed\n");
+            //                 exit(EXIT_FAILURE);
+            //             }
+            //             // download file
+            //             write_file(fp, data_server_sd);
+            //             fclose(fp);
+            //             close(data_server_sd); // close data connection
+            //             close(data_sd);
+            //             exit(0);
+            //         }
+            //         wait(NULL);                        // wait for child process to finish
+            //         rename(temp_filename, filename);       // rename temp file to original filename
+            //         bzero(response, sizeof(response)); // wait for the Transfer success message
+            //         recv(client_sd, &response, sizeof(response), 0);
+            //         printf("%s\n", response);
+            //         // after the data transfer, increment data port by 1 for the future connection
+            //         data_port++;
+            //     }
+            // }
         }
         else if (strncmp(buffer, "LIST", 4) == 0)
         {
@@ -416,7 +514,7 @@ int main()
             bzero(response, sizeof(response));
             recv(client_sd, &response, sizeof(response), 0); // recieve output from the server
             printf("%s\n", response);
-            if (strcmp(response, "221 Service closing control connection.") == 0)  // close connection and terminate the program
+            if (strcmp(response, "221 Service closing control connection.") == 0) // close connection and terminate the program
             {
                 break;
             }
